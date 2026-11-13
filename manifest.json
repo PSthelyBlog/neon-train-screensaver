@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.psthelyblog.neon-train-screensaver",
+  "name": "Loop Line",
+  "version": "0.1.0",
+  "author": "Philippe Sthely",
+  "license": "MIT",
+  "description": "A real-time 3D screensaver: a window seat on an endless elevated loop line through a neon city at night, with synthesized sound.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Loop Line",
+    "description": "Start the Loop Line screensaver and change its graphics and sound settings.",
+    "category": "System",
+    "aliases": [
+      "loopline",
+      "train",
+      "screensaver",
+      "metro"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right"
+  },
+  "homepage": "https://github.com/PSthelyBlog/neon-train-screensaver"
+}
