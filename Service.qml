@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import "Sim.js" as Sim
+import "Auto.js" as Auto
 
 // Owns everything that must exist once: the settings, the idle trigger, the
 // ride, and its sound. Each screen gets a window that only draws the ride.
@@ -20,9 +21,22 @@ Item {
   // hand, so every value is checked on the way in.
   readonly property bool startWhenIdle: cfg.startWhenIdle === true
   readonly property int timeoutSeconds: Math.max(30, Math.min(7200, Math.round(Number(cfg.timeout) || 150)))
-  readonly property string quality: ["low", "medium", "high", "ultra"].indexOf(cfg.quality) >= 0 ? cfg.quality : "high"
-  readonly property int qualityLevel: ["low", "medium", "high", "ultra"].indexOf(quality)
-  readonly property int fps: Number(cfg.fps) === 30 ? 30 : 60
+  readonly property string quality: ["auto", "low", "medium", "high", "ultra"].indexOf(cfg.quality) >= 0 ? cfg.quality : "auto"
+  readonly property bool autoQuality: quality === "auto"
+  readonly property int userFps: Number(cfg.fps) === 30 ? 30 : 60
+
+  // The quality the user picked is the ceiling, not a promise: the watchdog
+  // keeps the ride at or below it, and below it whenever the machine cannot
+  // carry it. Auto quality is the same thing with no ceiling.
+  readonly property int ceilingLevel: autoQuality ? 3 : ["low", "medium", "high", "ultra"].indexOf(quality)
+  property var watchdog: Auto.initial(ceilingLevel, userFps)
+
+  readonly property int qualityLevel: Auto.level(watchdog)
+  readonly property int fps: Auto.fps(watchdog)
+
+  // What the ride is running at right now, which is not always what was
+  // asked for.
+  readonly property string runningQuality: Auto.name(watchdog)
   readonly property string rain: ["off", "light", "heavy"].indexOf(cfg.rain) >= 0 ? cfg.rain : "light"
   readonly property real rainLevel: rain === "off" ? 0 : (rain === "light" ? 0.5 : 1)
   readonly property bool hud: cfg.hud !== false
@@ -48,12 +62,80 @@ Item {
   property real fade: 0
   property real tunnelMix: 0
   property real effort: 0
+  property real lastFrameAt: 0
+
+  // Frames drawn since the ride started. A screen that is off draws none,
+  // and that is not a stall.
+  property int framesSeen: 0
+
+  // Set when a ride had to be ended because the machine could not carry it.
+  // A fixed quality that hangs the desktop must not come back on its own.
+  property bool blocked: false
   readonly property real master: sound && active ? volume * volume * fade : 0
   readonly property real trainGain: soundTrain ? master : 0
 
   function setSetting(key, value) {
     var known = ["startWhenIdle", "timeout", "quality", "fps", "rain", "hud", "sound", "volume", "soundTrain", "soundRain", "soundChimes"]
     if (known.indexOf(key) >= 0) cfg[key] = value
+    // A new quality is a new chance: let the machine try it.
+    if (key === "quality") resume()
+  }
+
+  // A new quality or a new frame rate is a new question: the machine has to
+  // prove it can hold it, so the watchdog starts over.
+  onCeilingLevelChanged: resetWatchdog()
+  onUserFpsChanged: resetWatchdog()
+
+  function resetWatchdog() {
+    watchdog = Auto.initial(ceilingLevel, userFps)
+  }
+
+  // One frame of the ride, and how long it took. The watchdog reads this to
+  // find out whether the machine is keeping up.
+  function reportFrame(dt) {
+    if (!active) return
+    lastFrameAt = Date.now()
+    framesSeen++
+    watchdog = Auto.observe(watchdog, dt)
+    if (watchdog.stopped) {
+      // The ride is starving the desktop. End it rather than take the whole
+      // machine down with it.
+      giveUp()
+    }
+  }
+
+  // The ride is over for now. It stays over until the user says otherwise,
+  // so a machine that cannot carry it is not put through the same thing
+  // every time it goes idle.
+  function giveUp() {
+    stop()
+    blocked = true
+  }
+
+  // The user wants to try again.
+  function resume() {
+    blocked = false
+    resetWatchdog()
+  }
+
+  // The frames stopped coming altogether. That is the case the frame times
+  // cannot see: no frames, no measurements. The wall clock can.
+  Timer {
+    id: stallWatch
+    interval: 500
+    running: root.active
+    repeat: true
+    onTriggered: {
+      if (!root.active) return
+      // A screen that is off draws no frames at all. That is not a stall.
+      if (root.framesSeen === 0) return
+      if (Date.now() - root.lastFrameAt < 2000) return
+      // Nothing has been drawn for two seconds. The ride is hanging the
+      // compositor, so it goes, and the next one starts lower.
+      root.lastFrameAt = Date.now()
+      root.watchdog = Auto.stall(root.watchdog)
+      if (root.watchdog.stopped) root.giveUp()
+    }
   }
 
   function start(byIdle) {
@@ -62,6 +144,11 @@ Item {
     fade = 0
     tunnelMix = 0
     effort = 0
+    lastFrameAt = Date.now()
+    framesSeen = 0
+    // Every ride starts at the bottom: the machine has to earn its way up
+    // again, and a fresh ride must not inherit the last one's verdict.
+    watchdog = Auto.reset(watchdog)
     publish()
     startedByIdle = !!byIdle
     startedAt = Date.now()
@@ -140,7 +227,7 @@ Item {
   Process { id: showCursor }
 
   function idleReached() {
-    if (active || !startWhenIdle || guard.running) return
+    if (active || !startWhenIdle || guard.running || blocked) return
     guard.running = true
   }
 
@@ -163,7 +250,7 @@ Item {
       id: cfg
       property bool startWhenIdle: true
       property int timeout: 150
-      property string quality: "high"
+      property string quality: "auto"
       property int fps: 60
       property string rain: "light"
       property bool hud: true

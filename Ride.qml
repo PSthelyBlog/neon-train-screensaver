@@ -35,6 +35,7 @@ Item {
     running: root.driver
     onTriggered: {
       root.pending += frameTime
+      root.service.reportFrame(frameTime)
       if (root.pending + 0.002 < 1 / root.service.fps) return
       root.service.advance(root.pending)
       root.pending = 0

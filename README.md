@@ -52,18 +52,42 @@ Changed from the bar panel and kept in `~/.config/loopline/settings.json`:
 | Setting | Choices |
 |---|---|
 | Start when idle | on or off, after 1, 2.5, 5 or 10 minutes |
-| Quality | Low, Medium, High, Ultra: render scale, view distance, wet-street reflections |
+| Quality | Auto, Low, Medium, High, Ultra: render scale, view distance, wet-street reflections |
 | Frame rate | 30 or 60 fps |
+
+Quality and frame rate are ceilings: the ride uses less when the machine
+needs it to.
 | Rain | off, light, heavy |
 | Station names | on or off |
 | Sound | master switch, volume, and train, rain and station chimes separately |
+
+## Quality that fits the machine
+
+The city is drawn by one fragment shader, and a shader that is too heavy for
+the GPU does not only look bad: it takes the whole desktop down with it,
+because the screensaver and the compositor share the same frame.
+
+The quality you pick is therefore a ceiling, not a promise. Every ride
+starts cheap and climbs towards the ceiling only while the machine proves it
+can stay there, and steps back down the moment it cannot. A machine that
+cannot carry the ceiling gets the cheapest ride that works, not a frozen
+desktop. The frame rate you pick is a ceiling in the same way.
+
+Auto quality is the same thing with no ceiling: it climbs as far as the
+machine lets it, up to Ultra at 60 fps.
+
+If even the cheapest ride does not fit, the ride ends itself rather than
+hang the desktop, and it does not come back on its own until you ask it to.
+The watchdog measures against the wall clock, not only against the frames,
+so a ride that stops the frames altogether is caught too. The bar panel
+offers a way to try again.
 
 ## What it needs
 
 - Omarchy with the Omarchy shell and Hyprland.
 - `qt6-multimedia` for sound, `jq`, and `hyprctl`. A stock Omarchy has all three.
-- A GPU. High at 1080p is light work for a recent card; pick Low or Medium on
-  integrated graphics.
+- A GPU. High at 1080p is light work for a recent card; the watchdog handles
+  integrated graphics on its own.
 
 ## What it changes on your system
 
@@ -89,10 +113,13 @@ omarchy toggle screensaver         # only if you turned Omarchy's screensaver of
 /usr/lib/qt6/bin/qsb -b --glsl "100 es,120,150,300 es,330" -o shaders/ride.vert.qsb shaders/ride.vert
 python3 tools/gen-sounds.py      # needs numpy
 node tests/sim.test.mjs
+node tests/auto.test.mjs
 ```
 
 `Sim.js` and `shaders/ride.frag` share the layout of the line (loop length,
-stations, tunnel); change them together. The shell keeps a running service
+stations, tunnel); change them together. `Auto.js` is the quality watchdog
+and holds no state of its own; it takes the frame intervals and returns the
+new state. The shell keeps a running service
 across hot reloads, so restart it (`omarchy restart shell`) after editing
 `Service.qml`.
 

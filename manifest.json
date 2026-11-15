@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.psthelyblog.neon-train-screensaver",
   "name": "Loop Line",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Philippe Sthely",
   "license": "MIT",
   "description": "A real-time 3D screensaver: a window seat on an endless elevated loop line through a neon city at night, with synthesized sound.",
