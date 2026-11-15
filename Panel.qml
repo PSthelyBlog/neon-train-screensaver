@@ -78,7 +78,7 @@ Panel {
     property string label: ""
     default property alias control: slot.data
     width: parent ? parent.width : 0
-    implicitHeight: Math.max(rowLabel.implicitHeight, slot.height)
+    implicitHeight: visible ? Math.max(rowLabel.implicitHeight, slot.height) : 0
 
     Label {
       id: rowLabel
@@ -211,16 +211,38 @@ Panel {
         SettingRow {
           label: strings.t("quality")
           Choice {
-            options: ["low", "medium", "high", "ultra"].map(function(q) { return { value: q, label: strings.t("quality." + q) } })
+            options: ["auto", "low", "medium", "high", "ultra"].map(function(q) { return { value: q, label: strings.t("quality." + q) } })
             value: root.service ? root.service.quality : ""
             onChanged: function(v) { root.set("quality", v) }
+          }
+        }
+        SettingRow {
+          label: strings.t("quality.running")
+          visible: root.service ? root.service.runningQuality !== root.service.quality : false
+          Label {
+            text: root.service ? strings.t("quality.running.at").arg(root.service.runningQuality) : ""
+            color: root.dim
+            font.pixelSize: Style.font.bodySmall
+          }
+        }
+        SettingRow {
+          label: strings.t("quality.paused")
+          visible: root.service ? root.service.blocked : false
+          Button {
+            text: strings.t("quality.paused.try")
+            fontSize: Style.font.bodySmall
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            bordered: true
+            enabled: root.service !== null
+            onClicked: { if (root.service) root.service.resume() }
           }
         }
         SettingRow {
           label: strings.t("fps")
           Choice {
             options: [30, 60].map(function(f) { return { value: String(f), label: strings.t("fps.value").arg(Commons.I18n.formatNumber(f, 0)) } })
-            value: root.service ? String(root.service.fps) : ""
+            value: root.service ? String(root.service.userFps) : ""
             onChanged: function(v) { root.set("fps", Number(v)) }
           }
         }
